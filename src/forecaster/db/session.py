@@ -10,9 +10,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from forecaster.config import get_settings
 
 
-@lru_cache
 def get_engine(url: str | None = None) -> Engine:
-    return create_engine(url or get_settings().sqlalchemy_url, pool_pre_ping=True, pool_recycle=3600)
+    # Resolve the URL before caching so a settings change never returns a stale engine.
+    return _engine(url or get_settings().sqlalchemy_url)
+
+
+@lru_cache
+def _engine(url: str) -> Engine:
+    return create_engine(url, pool_pre_ping=True, pool_recycle=3600)
 
 
 def get_sessionmaker(url: str | None = None) -> sessionmaker[Session]:

@@ -17,7 +17,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 | 4 | Modeling (baselines, LightGBM/XGBoost, LSTM, walk-forward) | done |
 | 5 | Backtesting | done |
 | 6 | FastAPI | done |
-| 7 | Streamlit dashboard | not started |
+| 7 | Streamlit dashboard | done |
 | 8 | Test hardening, docs | ongoing |
 
 ## Layout
@@ -36,7 +36,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 │   ├── modeling/             # baselines, GBM, LSTM, walk-forward, metrics, registry, train/predict
 │   ├── backtest/             # vectorised engine, performance stats, bootstrap, runner
 │   ├── api/                  # FastAPI app (read-only GET endpoints), response schemas
-│   └── dashboard/            # phase 7
+│   └── dashboard/            # Streamlit app, data queries, plotly charts
 ├── artifacts/models/         # trained model files (git-ignored)
 └── tests/
 ```
@@ -200,6 +200,28 @@ is read-only; put it behind a reverse proxy with auth before exposing it. Foreca
 on demand from the active model, stored as `kind = 'live'`, and cached until a new daily candle
 closes or a new model is activated. `404` = not a configured target, `503` = no data or no
 trained model yet.
+
+## Dashboard (phase 7)
+
+```bash
+forecaster dashboard                          # http://127.0.0.1:8501
+```
+
+One filter row (symbol, model, horizon, chart range) scopes four tabs:
+
+- **Forecast**: a P(up) tile and the 80% price range per horizon, the backtest coverage of that
+  range, the model version, and a fan chart of recent closes with the projected range and
+  median (dashed, because it is a projection).
+- **Market**: daily candlesticks with SMA 20/50/200 and Bollinger bands; volume and RSI(14) in
+  separate panels below.
+- **Model performance**: the walk-forward metrics table for active models, the verdict vs
+  climatology, a calibration (reliability) chart, and rolling 90-day coverage of the 80% range.
+- **Backtest**: the verdict (significant, not significant, or does not beat), strategy vs
+  buy-and-hold tiles, and the equity and drawdown curves.
+
+A disclaimer banner sits at the top and the bottom. Every chart has a legend and a data-table
+expander. Colours come from a CVD-validated palette with separate light and dark steps, and up/down
+uses a blue/red pair. No chart uses two y-axes. Forecasts shown are stored as `live` predictions.
 
 ## Database schema
 

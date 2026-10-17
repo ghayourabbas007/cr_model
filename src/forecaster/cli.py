@@ -298,6 +298,17 @@ def serve(
     uvicorn.run(create_app(s), host=host or s.api_host, port=port or s.api_port, log_config=None)
 
 
+@app.command("dashboard")
+def dashboard(port: int = typer.Option(8501, help="Streamlit port.")) -> None:
+    """Open the Streamlit dashboard (binds to localhost)."""
+    import subprocess
+    import sys
+
+    app_path = Path(__file__).resolve().parent / "dashboard" / "app.py"
+    raise typer.Exit(subprocess.call([sys.executable, "-m", "streamlit", "run", str(app_path),
+                                      "--server.port", str(port), "--server.address", "127.0.0.1"]))
+
+
 def _print_reports(reports) -> None:
     for r in reports:
         typer.echo(f"{r.symbol:<10} {r.interval:<3} dump={r.rows_dump:<6} api={r.rows_api:<6} "
