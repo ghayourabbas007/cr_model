@@ -14,7 +14,7 @@ EXPECTED_TABLES = {"symbols", "klines", "features", "model_runs", "predictions",
 
 
 def test_migration_creates_all_tables(migrated_engine) -> None:
-    assert EXPECTED_TABLES <= set(inspect(migrated_engine).get_table_names())
+    assert set(inspect(migrated_engine).get_table_names()) >= EXPECTED_TABLES
 
 
 def test_migration_matches_orm_columns(migrated_engine) -> None:

@@ -9,8 +9,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
 from alembic import op
+from sqlalchemy.dialects import mysql
 
 revision: str = "0002"
 down_revision: str | None = "0001"
@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("symbol_id", sa.Integer(), nullable=False),
         sa.Column("metric", sa.String(32), nullable=False),
         sa.Column("ts", sa.DateTime().with_variant(mysql.DATETIME(fsp=3), "mysql"), nullable=False),
-        sa.Column("value", sa.Float(), nullable=False),
+        sa.Column("value", sa.Double(), nullable=False),
         sa.Column("ingested_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_market_context"),
         sa.ForeignKeyConstraint(

@@ -63,7 +63,8 @@ def test_feature_frame_shape_and_timing(inputs: FeatureInputs) -> None:
 
 
 def test_no_lookahead_full_feature_set(inputs: FeatureInputs) -> None:
-    cutoffs = default_cutoffs(inputs, 6) + [
+    cutoffs = [
+        *default_cutoffs(inputs, 6),
         T0 + 250 * DAY + timedelta(hours=3),   # mid-candle
         T0 + 251 * DAY,                         # exactly at a daily close
     ]

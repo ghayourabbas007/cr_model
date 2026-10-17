@@ -18,7 +18,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 | 5 | Backtesting | done |
 | 6 | FastAPI | done |
 | 7 | Streamlit dashboard | done |
-| 8 | Test hardening, docs | ongoing |
+| 8 | Quality: tests, lint, CI, live contract tests, docs | done |
 
 ## Layout
 
@@ -43,18 +43,41 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 
 ## Setup
 
-Requirements: Python 3.11+, MySQL 8.
+Requirements: Python 3.11 or 3.12 (torch, LightGBM and XGBoost wheels lag new Python releases),
+MySQL 8.
 
 ```bash
+# with uv (recommended; it can also download Python for you)
+uv venv --python 3.12 .venv
+uv pip install -r requirements.txt -e . --index-strategy unsafe-best-match \
+    --extra-index-url https://download.pytorch.org/whl/cpu      # CPU-only torch, much smaller
+
+# or with plain pip
 python -m venv .venv
 .venv\Scripts\activate          # Windows  (source .venv/bin/activate on Linux/macOS)
-pip install -r requirements.txt
-pip install -e .
+pip install -r requirements.txt -e .
 
 cp .env.example .env            # then edit DB_* values
 mysql -u root -p < scripts/create_database.sql
 forecaster db init              # runs migrations + inserts configured symbols
 ```
+
+## Quickstart: the whole pipeline
+
+```bash
+forecaster db init                            # schema + symbols
+forecaster data backfill                      # about 6 min for SOL/BTC/ETH, 1d + 4h, from 2020-08
+forecaster data context                       # funding rate + open interest
+forecaster features check-leakage -s SOLUSDT  # must print OK
+forecaster train                              # walk-forward eval + versioned models (LSTM is the slow part)
+forecaster backtest                           # strategy vs buy-and-hold, after costs
+forecaster predict                            # today's 7/14-day forecast
+forecaster serve        # API  -> http://127.0.0.1:8000/docs
+forecaster dashboard    # UI   -> http://127.0.0.1:8501
+```
+
+Keep it current with `forecaster data schedule` (or schedule `forecaster data update` and
+`forecaster data context`), and retrain periodically, e.g. weekly, with `forecaster train`.
 
 ## Data pipeline (phase 2)
 
@@ -237,14 +260,27 @@ uses a blue/red pair. No chart uses two y-axes. Forecasts shown are stored as `l
 
 All timestamps are naive UTC.
 
-## Tests
+## Tests and quality
 
 ```bash
-pytest
+pytest                                        # about 120 tests, no network, about 2 minutes
+ruff check src tests migrations               # lint
+FORECASTER_LIVE_TESTS=1 pytest -m live        # contract tests against real Binance public endpoints
+FORECASTER_TEST_MYSQL_URL=mysql+pymysql://user:pw@127.0.0.1:3306/empty_test_db pytest tests/test_mysql.py
 ```
 
-Schema tests run the real Alembic migrations against a temporary SQLite database and check that
-the migration and the ORM models have identical columns.
+| Area | What is tested |
+|------|----------------|
+| Data pipeline | kline parsing (ms and µs epochs), validation, gap detection, retries/backoff/Retry-After, weight throttling, pagination, dump checksums, idempotent upserts, gap repair, incremental updates, context ingestion |
+| Leakage | causality of every indicator; truncation test of the full feature set (incl. mid-candle cutoffs and gaps); planted-leak canaries the check must catch; purge correctness of walk-forward splits; a spy model proving folds never see test rows; LSTM windows unaffected by future data |
+| Modeling | metrics, baselines, real-signal detection vs. a pure-noise guard (no fake skill), quantile ordering, calibration, artifact round-trips, versioning/activation, end-to-end train + forecast |
+| Backtest | next-day timing (a look-ahead strategy cannot profit), costs, flips, gaps, bootstrap, verdicts |
+| API / dashboard | response shapes, disclaimers, caching, error codes, GET-only; chart structure in both themes (no dual axes); full Streamlit app smoke run |
+| Schema | real Alembic migrations on SQLite, migration/ORM column parity, MySQL upsert SQL compilation; optional MySQL round trip |
+
+CI (`.github/workflows/ci.yml`) runs lint and tests on Python 3.11 and 3.12 against a MySQL 8
+service container, which enables the MySQL integration test. The live contract job is
+informational, because Binance blocks some cloud regions, including GitHub's US runners.
 
 ## Security
 

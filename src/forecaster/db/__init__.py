@@ -10,5 +10,12 @@ from forecaster.db.models import (
 )
 
 __all__ = [
-    "Base", "BacktestResult", "FeatureRow", "Kline", "MarketContext", "ModelRun", "Prediction", "Symbol",
+    "BacktestResult",
+    "Base",
+    "FeatureRow",
+    "Kline",
+    "MarketContext",
+    "ModelRun",
+    "Prediction",
+    "Symbol",
 ]

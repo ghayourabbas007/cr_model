@@ -121,7 +121,7 @@ with tab_fc:
         if any(f["stale"] for f in forecasts):
             st.warning("Market data is more than 2 days old; run `forecaster data update`.", icon="⏱️")
         cols = st.columns(len(forecasts))
-        for col, f in zip(cols, forecasts):
+        for col, f in zip(cols, forecasts, strict=True):
             with col:
                 st.metric(f"P(up) in {f['horizon_days']} days", f"{f['prob_up']:.0%}")
                 st.markdown(

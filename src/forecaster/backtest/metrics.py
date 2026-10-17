@@ -36,7 +36,7 @@ def summarize(returns: pd.Series, position: pd.Series | None = None, trades: lis
         "sharpe": sharpe(returns),
         "sortino": sortino(returns),
         "max_drawdown": max_drawdown(eq),
-        "days": int(len(returns)),
+        "days": len(returns),
     }
     if position is not None:
         out["exposure"] = float((position != 0).mean())

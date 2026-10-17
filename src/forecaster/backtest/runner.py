@@ -78,7 +78,7 @@ def backtest_model(session: Session, s: Settings, symbol: str, horizon: int, mod
     beats, text = verdict(strat, bench, boot)
 
     curve = [{"t": t.isoformat(), "strategy": float(a), "benchmark": float(b), "position": float(p)}
-             for t, a, b, p in zip(out.equity.index, out.equity, out.benchmark_equity, out.position)]
+             for t, a, b, p in zip(out.equity.index, out.equity, out.benchmark_equity, out.position, strict=True)]
     res = BacktestResult(
         model_run_id=run.id, symbol_id=sym.id, strategy=f"{model_name}_{params.name()}", horizon_days=horizon,
         period_start=out.returns.index[0].to_pydatetime(), period_end=out.returns.index[-1].to_pydatetime(),

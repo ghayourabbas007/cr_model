@@ -9,8 +9,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
 from alembic import op
+from sqlalchemy.dialects import mysql
 
 revision: str = "0001"
 down_revision: str | None = None
@@ -123,14 +123,14 @@ def upgrade() -> None:
         sa.Column("as_of_time", sa.DateTime(), nullable=False),
         sa.Column("horizon_days", sa.Integer(), nullable=False),
         sa.Column("reference_price", Price, nullable=False),
-        sa.Column("prob_up", sa.Float(), nullable=True),
-        sa.Column("return_q10", sa.Float(), nullable=True),
-        sa.Column("return_q50", sa.Float(), nullable=True),
-        sa.Column("return_q90", sa.Float(), nullable=True),
+        sa.Column("prob_up", sa.Double(), nullable=True),
+        sa.Column("return_q10", sa.Double(), nullable=True),
+        sa.Column("return_q50", sa.Double(), nullable=True),
+        sa.Column("return_q90", sa.Double(), nullable=True),
         sa.Column("price_q10", Price, nullable=True),
         sa.Column("price_q50", Price, nullable=True),
         sa.Column("price_q90", Price, nullable=True),
-        sa.Column("realized_return", sa.Float(), nullable=True),
+        sa.Column("realized_return", sa.Double(), nullable=True),
         _created_at(),
         sa.PrimaryKeyConstraint("id", name="pk_predictions"),
         sa.ForeignKeyConstraint(
@@ -153,16 +153,16 @@ def upgrade() -> None:
         sa.Column("horizon_days", sa.Integer(), nullable=False),
         sa.Column("period_start", sa.DateTime(), nullable=False),
         sa.Column("period_end", sa.DateTime(), nullable=False),
-        sa.Column("fee_bps", sa.Float(), nullable=False),
-        sa.Column("slippage_bps", sa.Float(), nullable=False),
-        sa.Column("total_return", sa.Float(), nullable=False),
-        sa.Column("sharpe", sa.Float(), nullable=True),
-        sa.Column("win_rate", sa.Float(), nullable=True),
-        sa.Column("max_drawdown", sa.Float(), nullable=False),
+        sa.Column("fee_bps", sa.Double(), nullable=False),
+        sa.Column("slippage_bps", sa.Double(), nullable=False),
+        sa.Column("total_return", sa.Double(), nullable=False),
+        sa.Column("sharpe", sa.Double(), nullable=True),
+        sa.Column("win_rate", sa.Double(), nullable=True),
+        sa.Column("max_drawdown", sa.Double(), nullable=False),
         sa.Column("n_trades", sa.Integer(), nullable=False),
-        sa.Column("benchmark_total_return", sa.Float(), nullable=False),
-        sa.Column("benchmark_sharpe", sa.Float(), nullable=True),
-        sa.Column("benchmark_max_drawdown", sa.Float(), nullable=True),
+        sa.Column("benchmark_total_return", sa.Double(), nullable=False),
+        sa.Column("benchmark_sharpe", sa.Double(), nullable=True),
+        sa.Column("benchmark_max_drawdown", sa.Double(), nullable=True),
         sa.Column("beats_benchmark", sa.Boolean(), nullable=False),
         sa.Column("params", sa.JSON(), nullable=True),
         sa.Column("equity_curve", sa.JSON(), nullable=True),

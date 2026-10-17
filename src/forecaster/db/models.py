@@ -16,7 +16,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
-    Float,
+    Double,
     ForeignKey,
     Index,
     Integer,
@@ -102,7 +102,7 @@ class MarketContext(Base):
     symbol_id: Mapped[int] = mapped_column(ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False)
     metric: Mapped[str] = mapped_column(String(32), nullable=False)
     ts: Mapped[datetime] = mapped_column(DateTimeMs, nullable=False)
-    value: Mapped[float] = mapped_column(Float, nullable=False)
+    value: Mapped[float] = mapped_column(Double, nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
 
@@ -180,15 +180,15 @@ class Prediction(TimestampMixin, Base):
     kind: Mapped[str] = mapped_column(String(8), default="live", server_default="live", nullable=False)
     horizon_days: Mapped[int] = mapped_column(Integer, nullable=False)
     reference_price: Mapped[float] = mapped_column(Price, nullable=False)
-    prob_up: Mapped[float | None] = mapped_column(Float)
-    return_q10: Mapped[float | None] = mapped_column(Float)
-    return_q50: Mapped[float | None] = mapped_column(Float)
-    return_q90: Mapped[float | None] = mapped_column(Float)
+    prob_up: Mapped[float | None] = mapped_column(Double)
+    return_q10: Mapped[float | None] = mapped_column(Double)
+    return_q50: Mapped[float | None] = mapped_column(Double)
+    return_q90: Mapped[float | None] = mapped_column(Double)
     price_q10: Mapped[float | None] = mapped_column(Price)
     price_q50: Mapped[float | None] = mapped_column(Price)
     price_q90: Mapped[float | None] = mapped_column(Price)
     # Filled in once the horizon has elapsed, for live calibration tracking.
-    realized_return: Mapped[float | None] = mapped_column(Float)
+    realized_return: Mapped[float | None] = mapped_column(Double)
 
 
 class BacktestResult(TimestampMixin, Base):
@@ -202,16 +202,16 @@ class BacktestResult(TimestampMixin, Base):
     horizon_days: Mapped[int] = mapped_column(Integer, nullable=False)
     period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    fee_bps: Mapped[float] = mapped_column(Float, nullable=False)
-    slippage_bps: Mapped[float] = mapped_column(Float, nullable=False)
-    total_return: Mapped[float] = mapped_column(Float, nullable=False)
-    sharpe: Mapped[float | None] = mapped_column(Float)
-    win_rate: Mapped[float | None] = mapped_column(Float)
-    max_drawdown: Mapped[float] = mapped_column(Float, nullable=False)
+    fee_bps: Mapped[float] = mapped_column(Double, nullable=False)
+    slippage_bps: Mapped[float] = mapped_column(Double, nullable=False)
+    total_return: Mapped[float] = mapped_column(Double, nullable=False)
+    sharpe: Mapped[float | None] = mapped_column(Double)
+    win_rate: Mapped[float | None] = mapped_column(Double)
+    max_drawdown: Mapped[float] = mapped_column(Double, nullable=False)
     n_trades: Mapped[int] = mapped_column(Integer, nullable=False)
-    benchmark_total_return: Mapped[float] = mapped_column(Float, nullable=False)
-    benchmark_sharpe: Mapped[float | None] = mapped_column(Float)
-    benchmark_max_drawdown: Mapped[float | None] = mapped_column(Float)
+    benchmark_total_return: Mapped[float] = mapped_column(Double, nullable=False)
+    benchmark_sharpe: Mapped[float | None] = mapped_column(Double)
+    benchmark_max_drawdown: Mapped[float | None] = mapped_column(Double)
     # Explicit verdict so poor results can't be hidden: did the strategy beat buy-and-hold
     # on risk-adjusted return after costs?
     beats_benchmark: Mapped[bool] = mapped_column(Boolean, nullable=False)

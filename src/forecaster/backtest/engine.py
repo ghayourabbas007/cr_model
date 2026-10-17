@@ -38,13 +38,11 @@ def positions_from_signals(prob_up: pd.Series, q50: pd.Series | None = None,
     meds = q50.to_numpy(dtype=float) if q50 is not None else np.zeros(len(probs))
     out = np.zeros(len(probs))
     pos = 0.0
-    for i, (pr, md) in enumerate(zip(probs, meds)):
+    for i, (pr, md) in enumerate(zip(probs, meds, strict=True)):
         if not np.isnan(pr):
             long_ok = pr >= p.enter_long and (not p.require_median_agrees or md > 0)
             short_ok = p.allow_short and pr <= p.enter_short and (not p.require_median_agrees or md < 0)
-            if pos > 0 and pr < p.exit_long:
-                pos = 0.0
-            elif pos < 0 and pr > p.exit_short:
+            if (pos > 0 and pr < p.exit_long) or (pos < 0 and pr > p.exit_short):
                 pos = 0.0
             if pos == 0:
                 pos = 1.0 if long_ok else (-1.0 if short_ok else 0.0)

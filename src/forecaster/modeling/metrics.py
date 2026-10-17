@@ -22,7 +22,7 @@ def classification_metrics(y_up, prob_up) -> dict:
     pred = (p >= 0.5).astype(int)
     both = len(np.unique(y)) == 2
     return {
-        "n": int(len(y)),
+        "n": len(y),
         "base_rate_up": float(y.mean()),
         "accuracy": float(accuracy_score(y, pred)),
         "precision": float(precision_score(y, pred, zero_division=0)),
@@ -48,7 +48,7 @@ def quantile_metrics(y_ret, q10, q50, q90) -> dict:
         "below_q10": float(np.mean(y < lo)),                   # nominal 0.10
         "above_q90": float(np.mean(y > hi)),                   # nominal 0.10
         "mean_width_80": float(np.mean(hi - lo)),
-        **{f"pinball_q{int(t * 100)}": pinball(y, q, t) for t, q in zip(QUANTILES, (lo, mid, hi))},
+        **{f"pinball_q{int(t * 100)}": pinball(y, q, t) for t, q in zip(QUANTILES, (lo, mid, hi), strict=True)},
     }
 
 

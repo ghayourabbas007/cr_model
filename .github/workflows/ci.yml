@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: crypto_forecast_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -proot" --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      # Disposable CI database: enables the MySQL integration test.
+      FORECASTER_TEST_MYSQL_URL: mysql+pymysql://root:root@127.0.0.1:3306/crypto_forecast_test?charset=utf8mb4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install
+        run: |
+          uv venv
+          uv pip install -r requirements.txt -e . ruff==0.14.0 \
+            --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Lint
+        run: uv run --no-sync ruff check src tests migrations
+      - name: Test
+        run: uv run --no-sync pytest -q
+
+  live-contract:
+    # Real Binance public endpoints (read-only). Informational: Binance geo-blocks some CI regions.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          uv venv
+          uv pip install -r requirements.txt -e . \
+            --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
+      - run: uv run --no-sync pytest -m live -q
+        env:
+          FORECASTER_LIVE_TESTS: "1"
