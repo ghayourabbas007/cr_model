@@ -245,6 +245,45 @@ def models_activate(run_id: int) -> None:
     typer.echo(f"Activated run {run_id}")
 
 
+@app.command("backtest")
+def backtest(
+    symbol: list[str] = typer.Option(None, "--symbol", "-s"),
+    horizon: list[int] = typer.Option(None, "--horizon"),
+    models: str = typer.Option(None, help="Comma-separated. Default: TRAIN_MODELS."),
+) -> None:
+    """Backtest active models' out-of-sample signals vs buy-and-hold, after fees and slippage."""
+    from forecaster.backtest.runner import backtest_model
+
+    s = get_settings()
+    names = [m.strip() for m in models.split(",")] if models else s.train_models
+    for sym in [x.upper() for x in symbol] if symbol else s.target_symbols:
+        for h in horizon or s.forecast_horizons:
+            typer.echo(f"\n{sym}  signals from {h}d models  (costs: {s.fee_bps:g} bps fee + "
+                       f"{s.slippage_bps:g} bps slippage per side)")
+            typer.echo(f"  {'model':<12}{'total':>9}{'B&H':>9}{'sharpe':>8}{'B&H':>7}{'maxDD':>8}{'B&H':>8}"
+                       f"{'trades':>7}{'win%':>6}{'expo':>6}{'p':>6}  verdict")
+            any_beats = False
+            for name in names:
+                with session_scope() as session:
+                    try:
+                        r = backtest_model(session, s, sym, h, name)
+                    except LookupError as exc:
+                        typer.echo(f"  {name:<12}skipped: {exc}")
+                        continue
+                st, bh, bt = r.strategy, r.benchmark, r.bootstrap
+                any_beats |= r.beats_benchmark and (bt["p_value"] or 1) < 0.05
+                fmt = lambda v, f: format(v, f) if v is not None else "n/a"  # noqa: E731
+                typer.echo(
+                    f"  {name:<12}{st['total_return']:>9.1%}{bh['total_return']:>9.1%}"
+                    f"{fmt(st['sharpe'], '.2f'):>8}{fmt(bh['sharpe'], '.2f'):>7}"
+                    f"{st['max_drawdown']:>8.1%}{bh['max_drawdown']:>8.1%}{st['n_trades']:>7}"
+                    f"{fmt(st['win_rate'] and st['win_rate'] * 100, '.0f'):>6}{st['exposure']:>6.0%}"
+                    f"{fmt(bt['p_value'], '.2f'):>6}  {r.verdict}")
+            if not any_beats:
+                typer.secho("  => No model shows a statistically significant edge over buy-and-hold "
+                            "for this horizon.", fg=typer.colors.YELLOW)
+
+
 def _print_reports(reports) -> None:
     for r in reports:
         typer.echo(f"{r.symbol:<10} {r.interval:<3} dump={r.rows_dump:<6} api={r.rows_api:<6} "

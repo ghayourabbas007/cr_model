@@ -66,6 +66,15 @@ class Settings(BaseSettings):
 
     fee_bps: float = 10.0
     slippage_bps: float = 5.0
+    # Strategy rules are fixed in advance, NOT tuned on the backtest (that would overfit it).
+    bt_enter_long: float = 0.55
+    bt_exit_long: float = 0.50
+    bt_allow_short: bool = False
+    bt_enter_short: float = 0.45
+    bt_exit_short: float = 0.50
+    bt_require_median_agrees: bool = False
+    bt_bootstrap_samples: int = 2000
+    bt_bootstrap_block: int = 20
 
     # Never required. Only ever read from the environment; never logged.
     binance_api_key: SecretStr | None = None

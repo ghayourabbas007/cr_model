@@ -25,9 +25,6 @@ lightgbm>=4.3
 torch>=2.3
 joblib>=1.4
 
-# Backtesting
-vectorbt>=0.26
-
 # API / dashboard
 fastapi>=0.111
 uvicorn[standard]>=0.30

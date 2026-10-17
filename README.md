@@ -15,7 +15,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 | 2 | Data pipeline (backfill, incremental updater, upserts, funding/OI) | done |
 | 3 | Feature engineering + leakage checks | done |
 | 4 | Modeling (baselines, LightGBM/XGBoost, LSTM, walk-forward) | done |
-| 5 | Backtesting | not started |
+| 5 | Backtesting | done |
 | 6 | FastAPI | not started |
 | 7 | Streamlit dashboard | not started |
 | 8 | Test hardening, docs | ongoing |
@@ -34,7 +34,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 │   ├── data/                 # Binance REST client, dumps, backfill, updater, scheduler
 │   ├── features/             # indicators, feature/target builder, leakage guard, storage
 │   ├── modeling/             # baselines, GBM, LSTM, walk-forward, metrics, registry, train/predict
-│   ├── backtest/             # phase 5
+│   ├── backtest/             # vectorised engine, performance stats, bootstrap, runner
 │   ├── api/                  # phase 6
 │   └── dashboard/            # phase 7
 ├── artifacts/models/         # trained model files (git-ignored)
@@ -154,6 +154,32 @@ out-of-sample predictions (`predictions.kind = 'oos'`) for backtests and calibra
 activates the new version. `forecaster predict` stores `kind = 'live'` forecasts and later
 back-fills their `realized_return`.
 
+## Backtesting (phase 5)
+
+```bash
+forecaster backtest                           # all TARGET_SYMBOLS x horizons x TRAIN_MODELS
+forecaster backtest -s SOLUSDT --horizon 7 --models lgbm,momentum
+```
+
+- **Signals** are the walk-forward out-of-sample predictions stored at training time
+  (`predictions.kind = 'oos'`), so each was made by a model that never saw that period.
+- **Rule** (fixed in advance, not tuned): long when P(up) >= `BT_ENTER_LONG` (0.55), flat when it
+  falls below `BT_EXIT_LONG` (0.50). Optional shorts and a "median must agree" filter.
+- **Timing**: the position decided at the close of day t earns the return from close t to close t+1.
+  A test proves a strategy using same-day information cannot profit from look-ahead.
+- **Costs**: `FEE_BPS` + `SLIPPAGE_BPS` per unit of position change (a long-to-short flip pays
+  twice). Positions are closed at the end. Buy-and-hold pays the same entry and exit costs.
+- **Reported**: total return, CAGR, volatility, Sharpe, Sortino, max drawdown, exposure, number of
+  trades, win rate and average trade, all against buy-and-hold over the identical period.
+- **Verdict**: `beats_benchmark` = higher Sharpe than buy-and-hold after costs. A paired circular
+  block bootstrap (blocks of 20 days) gives a p-value for the Sharpe difference. A higher Sharpe
+  that is not significant is labelled as such, and the command says so explicitly when no model
+  shows a significant edge.
+- Results, the full equity curve and all statistics are stored in `backtest_results`.
+
+A custom engine (about 100 lines of pandas) is used instead of vectorbt or Backtrader. Every step
+is visible and covered by hand-computed tests, and vectorbt's numba dependency pins NumPy versions.
+
 ## Database schema
 
 | Table | Purpose | Key |
@@ -204,4 +230,11 @@ the migration and the ORM models have identical columns.
 - Overlapping h-day targets make out-of-sample rows highly autocorrelated, so the effective sample
   size is far smaller than the row count; metric differences of a few thousandths are noise.
 - Artifacts are pickles (joblib). Only load files this system wrote.
+- The backtest evaluates **daily** signals from models trained for 7/14-day targets. Positions are
+  re-evaluated every day rather than held for the full horizon.
+- Fills are assumed at the daily close with a flat slippage estimate. No funding costs for shorts,
+  no market impact, no partial fills.
+- The OOS period starts after `WF_MIN_TRAIN_DAYS`, so the backtest covers less than the full
+  history. Results depend heavily on the market regime in that window (crypto bull and bear runs
+  dominate buy-and-hold).
 
