@@ -163,7 +163,7 @@ back-fills their `realized_return`.
 | `market_context` | Funding rate, open interest per symbol (`ts` = publish time) | `(symbol_id, metric, ts)` |
 | `features` | Versioned feature vectors (JSON), stamped with `as_of_time` = when knowable | `(symbol_id, interval, as_of_time, feature_set_version)` |
 | `model_runs` | Model versions, params, walk-forward metrics, artifact path, active flag | `(model_name, symbol_id, horizon_days, version)` |
-| `predictions` | prob_up + q10/q50/q90 log-return & price; `kind` = live | oos; `realized_return` filled later | `(model_run_id, as_of_time, horizon_days, kind)` |
+| `predictions` | prob_up + q10/q50/q90 log-return & price; `kind` = `live` or `oos`; `realized_return` filled later | `(model_run_id, as_of_time, horizon_days, kind)` |
 | `backtest_results` | Strategy vs. buy-and-hold metrics, explicit `beats_benchmark` flag, equity curve | — |
 
 All timestamps are naive UTC.
