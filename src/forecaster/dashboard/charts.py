@@ -41,6 +41,10 @@ DARK = Theme(s1="#3987e5", s2="#d95926", s3="#199e70", s4="#c98500", up="#3987e5
 FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
 
 
+# Status palette (reserved: colour MEANS good/bad here, always paired with a text label).
+STATUS_GOOD, STATUS_CRITICAL = "#0ca30c", "#d03b3b"
+
+
 def theme(dark: bool) -> Theme:
     return DARK if dark else LIGHT
 
@@ -164,3 +168,50 @@ def equity_chart(curve: pd.DataFrame, title: str, dark: bool = False) -> go.Figu
     fig.update_yaxes(title_text="Drawdown", tickformat=".0%", row=2, col=1)
     fig.update_layout(title=dict(text=title, font=dict(color=t.ink)))
     return _style(fig, t, 460)
+
+
+def signal_chart(closes: pd.Series, sig, dark: bool = False, lookback: int = 60) -> go.Figure:
+    """Recent closes, then the plan's levels drawn across the signal's validity window."""
+    t = theme(dark)
+    fig = go.Figure()
+    h = closes.iloc[-lookback:]
+    fig.add_trace(go.Scatter(x=h.index, y=h.values, name="Close", line=dict(color=t.s1, width=2),
+                             hovertemplate="%{y:,.4f}<extra>Close</extra>"))
+    start, end = pd.Timestamp(sig.as_of_time), pd.Timestamp(sig.valid_until)
+    fig.add_vrect(x0=start, x1=end, fillcolor=t.band, line_width=0, layer="below",
+                  annotation_text=f"valid {sig.horizon_days}d", annotation_position="top left",
+                  annotation_font_color=t.muted)
+    if sig.entry is not None:
+        fig.add_hrect(y0=sig.entry_low, y1=sig.entry_high, x0=0.0, x1=1.0, fillcolor=t.band, line_width=0,
+                      layer="below")
+        for name, level, color, dash in (("TP2", sig.tp2, STATUS_GOOD, "dot"), ("TP1", sig.tp1, STATUS_GOOD, "solid"),
+                                         ("Entry", sig.entry, t.ink2, "solid"),
+                                         ("Stop", sig.stop_loss, STATUS_CRITICAL, "solid")):
+            pct = level / sig.reference_price - 1
+            fig.add_trace(go.Scatter(
+                x=[start, end], y=[level, level], mode="lines", name=name, showlegend=True,
+                line=dict(color=color, width=2, dash=dash),
+                hovertemplate=f"{name} %{{y:,.4f}} ({pct:+.1%})<extra></extra>"))
+            fig.add_annotation(x=end, y=level, xanchor="left", showarrow=False, font=dict(color=t.ink2),
+                               text=f" {name} {level:,.4f} ({pct:+.1%})")
+    side = {"LONG": "▲ LONG", "SHORT": "▼ SHORT"}.get(sig.side, "■ NO TRADE")
+    fig.update_yaxes(title_text="Price")
+    fig.update_layout(title=dict(text=f"{side} · {sig.horizon_days}d plan (estimate, not advice)",
+                                 font=dict(color=t.ink)), margin=dict(r=150))
+    return _style(fig, t, 420)
+
+
+def r_curve(history: pd.DataFrame, dark: bool = False) -> go.Figure:
+    """Cumulative R of historical out-of-sample signals, one point per signal."""
+    t = theme(dark)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=history["as_of_time"], y=history["r"].cumsum(), name="Cumulative R",
+                             line=dict(color=t.s1, width=2),
+                             customdata=history[["side", "outcome", "r"]].to_numpy(),
+                             hovertemplate="%{customdata[0]} → %{customdata[1]} (%{customdata[2]:+.2f}R)"
+                                           "<br>cumulative %{y:+.1f}R<extra></extra>"))
+    fig.add_hline(y=0, line=dict(color=t.axis, width=1))
+    fig.update_yaxes(title_text="Cumulative R (after costs)")
+    fig.update_layout(title=dict(text="Historical signals with these rules (out-of-sample)",
+                                 font=dict(color=t.ink)), showlegend=False)
+    return _style(fig, t, 320)

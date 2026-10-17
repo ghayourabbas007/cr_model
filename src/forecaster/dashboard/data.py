@@ -76,13 +76,14 @@ def oos_predictions(session: Session, symbol: str, horizon: int, model: str) -> 
         return pd.DataFrame()
     rows = session.execute(
         select(Prediction.as_of_time, Prediction.reference_price, Prediction.prob_up, Prediction.return_q10,
-               Prediction.return_q50, Prediction.return_q90, Prediction.price_q10, Prediction.price_q90,
+               Prediction.return_q50, Prediction.return_q90, Prediction.price_q10, Prediction.price_q50,
+               Prediction.price_q90,
                Prediction.realized_return)
         .where(Prediction.model_run_id == run.id, Prediction.kind == "oos")
         .order_by(Prediction.as_of_time)
     ).all()
     df = pd.DataFrame(rows, columns=["as_of_time", "reference_price", "prob_up", "q10", "q50", "q90",
-                                     "price_q10", "price_q90", "realized_return"])
+                                     "price_q10", "price_q50", "price_q90", "realized_return"])
     df["up"] = (df["realized_return"] > 0).astype(float)
     df["inside"] = ((df["realized_return"] >= df["q10"]) & (df["realized_return"] <= df["q90"])).astype(float)
     return df.set_index("as_of_time")

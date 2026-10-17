@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     bt_enter_short: float = 0.45
     bt_exit_short: float = 0.50
     bt_require_median_agrees: bool = False
+    # --- Signal tab (entry thresholds reuse BT_ENTER_LONG / BT_ENTER_SHORT) ---
+    signal_allow_short: bool = True
+    signal_sl_atr_mult: float = 1.0     # stop never closer than this many daily ATRs
+    signal_entry_zone_atr: float = 0.25
+    signal_min_rr: float = 1.0          # minimum risk/reward to TP2, else NO TRADE
     bt_bootstrap_samples: int = 2000
     bt_bootstrap_block: int = 20
 

@@ -262,11 +262,26 @@ trained model yet.
 forecaster dashboard                          # http://127.0.0.1:8501
 ```
 
-One filter row (symbol, model, horizon, chart range) scopes four tabs:
+One filter row (symbol, model, horizon, chart range) scopes five tabs:
 
 - **Forecast**: a P(up) tile and the 80% price range per horizon, the backtest coverage of that
   range, the model version, and a fan chart of recent closes with the projected range and
   median (dashed, because it is a projection).
+- **Signal**: a rule-based trade plan per horizon, derived mechanically from the forecast. It is
+  research output, not advice, and the tab says so.
+  - *Direction*: LONG if P(up) >= `BT_ENTER_LONG` (0.55) and the median price is above entry;
+    SHORT if P(up) <= `BT_ENTER_SHORT` (0.45) and the median is below (`SIGNAL_ALLOW_SHORT`);
+    otherwise NO TRADE, with the reason.
+  - *Levels*: entry = last close (entry zone ± 0.25 ATR); stop = the 10th-percentile price, but
+    never closer than `SIGNAL_SL_ATR_MULT` × ATR(14); TP1 = median price; TP2 = 90th-percentile
+    price (mirrored for shorts). The R:R to both targets is shown, and below `SIGNAL_MIN_RR` to TP2
+    the plan becomes NO TRADE.
+  - *Invalidation*: stop hit, horizon expiry (time stop), the forecast flipping through 50% on a
+    later close, price already outside the entry zone or past TP1, or stale data.
+  - *Track record*: the same rules are replayed on the walk-forward out-of-sample predictions, using
+    daily high/low paths. If a candle touches both stop and target, the stop is assumed first.
+    Costs are included. The tab shows win rate, target/stop/expiry rates, average and cumulative R.
+    Signals overlap in time, so these are not independent trades.
 - **Market**: daily candlesticks with SMA 20/50/200 and Bollinger bands; volume and RSI(14) in
   separate panels below.
 - **Model performance**: the walk-forward metrics table for active models, the verdict vs

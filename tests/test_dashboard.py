@@ -135,4 +135,4 @@ def test_streamlit_app_renders(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
     assert not at.exception, at.exception
     assert any("not financial advice" in w.value for w in at.warning)
     assert any(m.label == "P(up) in 7 days" for m in at.metric)
-    assert [t.label for t in at.tabs] == ["Forecast", "Market", "Model performance", "Backtest"]
+    assert [t.label for t in at.tabs] == ["Forecast", "Signal", "Market", "Model performance", "Backtest"]

@@ -15,6 +15,15 @@ from forecaster.config import get_settings
 from forecaster.dashboard import charts
 from forecaster.dashboard import data as dd
 from forecaster.db.session import get_sessionmaker
+from forecaster.signals import (
+    LONG,
+    SHORT,
+    atr_by_close_time,
+    make_signal,
+    rules_from_settings,
+    signal_history,
+    summarize_history,
+)
 
 st.set_page_config(page_title="Crypto Forecaster", page_icon="📈", layout="wide")
 s = get_settings()
@@ -35,6 +44,13 @@ def _session():
 def load_candles(symbol: str, days: int) -> pd.DataFrame:
     with _session() as session:
         return dd.candles_with_indicators(session, symbol, days)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_daily(symbol: str) -> pd.DataFrame:
+    """Full daily history (ATR and signal replay need more than the chart window)."""
+    with _session() as session:
+        return dd.candles_with_indicators(session, symbol, days=100_000)
 
 
 @st.cache_data(ttl=300, show_spinner="Computing forecast…")
@@ -118,7 +134,8 @@ if SNAPSHOT:
     st.info(f"Static snapshot: market data and models as of **{last_close:%Y-%m-%d %H:%M} UTC**. "
             "It is refreshed manually, so forecasts are not live.", icon="🗂️")
 
-tab_fc, tab_mkt, tab_perf, tab_bt = st.tabs(["Forecast", "Market", "Model performance", "Backtest"])
+tab_fc, tab_sig, tab_mkt, tab_perf, tab_bt = st.tabs(
+    ["Forecast", "Signal", "Market", "Model performance", "Backtest"])
 
 # --- forecast ---------------------------------------------------------------------------------
 with tab_fc:
@@ -146,6 +163,81 @@ with tab_fc:
         with st.expander("Forecast data table"):
             st.dataframe(pd.DataFrame(forecasts).drop(columns=["disclaimer"]), width="stretch")
         st.caption("A probability near 50% means the model has no meaningful directional view.")
+
+# --- signal -----------------------------------------------------------------------------------
+@st.cache_data(ttl=300, show_spinner="Replaying historical signals…")
+def load_signal_history(symbol: str, horizon: int, model: str, target: str) -> pd.DataFrame:
+    return signal_history(load_oos(symbol, horizon, model), load_daily(symbol), horizon,
+                          rules_from_settings(s), target)
+
+
+def fmt_level(v: float, ref: float) -> str:
+    return f"{v:,.4f} ({v / ref - 1:+.1%})"
+
+
+with tab_sig:
+    st.warning("**Research output, not financial advice.** These levels are generated mechanically from the "
+               "model's forecast range. Out-of-sample, the models have not shown a statistically significant "
+               "edge (see *Model performance* and *Backtest*). Do not risk money you cannot afford to lose.",
+               icon="⚠️")
+    forecasts, reason = load_forecasts(symbol, model)
+    if not forecasts:
+        st.info(f"No signal available: {reason}")
+    else:
+        rules = rules_from_settings(s)
+        daily = load_daily(symbol)
+        atr_now = atr_by_close_time(daily)
+        verdicts = load_models(symbol)
+        sigs = []
+        for col, f in zip(st.columns(len(forecasts)), forecasts, strict=True):
+            sig = make_signal(f, float(atr_now.get(pd.Timestamp(f["as_of_time"]), float("nan"))), rules)
+            sigs.append(sig)
+            with col, st.container(border=True):
+                icon = {LONG: "▲", SHORT: "▼"}.get(sig.side, "■")
+                st.markdown(f"### {icon} {sig.side} · {sig.horizon_days} days")
+                st.caption(sig.reason)
+                if sig.entry is not None:
+                    ref = sig.reference_price
+                    st.dataframe(pd.DataFrame([
+                        {"level": "Entry (last close)", "price": f"{sig.entry:,.4f}"},
+                        {"level": "Entry zone", "price": f"{sig.entry_low:,.4f} – {sig.entry_high:,.4f}"},
+                        {"level": "Stop loss", "price": fmt_level(sig.stop_loss, ref)},
+                        {"level": "TP1 (median)", "price": f"{fmt_level(sig.tp1, ref)} · R:R {sig.rr_tp1:.2f}"},
+                        {"level": "TP2 (80% edge)", "price": f"{fmt_level(sig.tp2, ref)} · R:R {sig.rr_tp2:.2f}"},
+                    ]), hide_index=True, width="stretch")
+                st.markdown(f"**P(up)** {sig.prob_up:.0%} · strength **{sig.strength}** · "
+                            f"ATR(14) {sig.atr:,.4f}  \n**Valid until** {sig.valid_until:%Y-%m-%d %H:%M} UTC")
+                v = verdicts[(verdicts["model"] == model) & (verdicts["horizon"] == sig.horizon_days)]
+                if not v.empty:
+                    st.caption(f"Model walk-forward verdict: {v.iloc[0]['verdict']}")
+                st.markdown("**Invalidation**\n" + "\n".join(f"- {x}" for x in sig.invalidation))
+
+        sel = next((x for x in sigs if x.horizon_days == horizon), sigs[0])
+        closes = daily["close"].copy()
+        closes.index = closes.index + pd.Timedelta(days=1)
+        st.plotly_chart(charts.signal_chart(closes, sel, dark), width="stretch", key="signal-chart")
+
+        st.subheader(f"How these rules did historically · {sel.horizon_days}d · {model}")
+        st.caption("Same rules replayed on walk-forward out-of-sample predictions: enter at the close, manage "
+                   f"over the next {sel.horizon_days} daily candles, stop assumed first if a candle touches both, "
+                   f"{rules.cost_bps:g} bps per side costs. Signals overlap in time, so they are not independent.")
+        hist = {t: load_signal_history(symbol, sel.horizon_days, model, t) for t in ("tp1", "tp2")}
+        if hist["tp1"].empty:
+            st.info("No historical signals with these rules for this model and horizon.")
+        else:
+            table = pd.DataFrame([{"target": t.upper(), **summarize_history(h)} for t, h in hist.items()])
+            st.dataframe(table.style.format({"win_rate": "{:.0%}", "target_hit": "{:.0%}", "stopped": "{:.0%}",
+                                             "expired": "{:.0%}", "avg_r": "{:+.2f}", "total_r": "{:+.1f}"}),
+                         hide_index=True, width="stretch")
+            best = max(table["avg_r"])
+            if best <= 0:
+                st.error("Historically these signals lost money on average after costs (average R ≤ 0).", icon="❌")
+            else:
+                st.warning("Positive average R historically, but signals overlap and this is not a significance "
+                           "test; see the Backtest tab's bootstrap p-value.", icon="⚠️")
+            st.plotly_chart(charts.r_curve(hist["tp1"], dark), width="stretch", key="signal-r-curve")
+            with st.expander("Historical signal table (TP1)"):
+                st.dataframe(hist["tp1"].iloc[::-1], width="stretch", hide_index=True)
 
 # --- market -----------------------------------------------------------------------------------
 with tab_mkt:
