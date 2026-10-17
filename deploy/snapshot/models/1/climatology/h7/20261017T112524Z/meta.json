@@ -1,0 +1,10 @@
+{
+  "symbol": "SOLUSDT",
+  "horizon": 7,
+  "model": "climatology",
+  "version": "20261017T112524Z",
+  "feature_set_version": "v1",
+  "features": [],
+  "trained_at": "2026-10-17 11:25:24.589384",
+  "rows": 2251
+}

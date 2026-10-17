@@ -276,6 +276,33 @@ A disclaimer banner sits at the top and the bottom. Every chart has a legend and
 expander. Colours come from a CVD-validated palette with separate light and dark steps, and up/down
 uses a blue/red pair. No chart uses two y-axes. Forecasts shown are stored as `live` predictions.
 
+## Cloud deployment (Streamlit Community Cloud)
+
+The cloud copy of the dashboard is **a static snapshot**. Streamlit Cloud cannot reach your MySQL,
+and Binance blocks US cloud regions, so the app cannot run the pipeline itself. It reads
+`deploy/snapshot/` (about 20 MB: SQLite plus the active model files), and a banner on the page shows
+the snapshot date.
+
+**Deploy (one time):**
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+2. Choose **Create app**, then **Deploy a public app from GitHub**.
+3. Repository `ghayourabbas007/cr_model`, branch `main`, main file path **`deploy/streamlit_app.py`**.
+4. Under **Advanced settings**, set Python to **3.12**. Then click **Deploy**.
+
+Streamlit installs `deploy/requirements.txt`, the slim cloud dependency set: no torch or FastAPI,
+and CPU-only XGBoost. The LSTM is therefore listed in the metrics and backtests but not offered
+as a serving model in the cloud.
+
+**Refresh the snapshot** (locally, then push; Streamlit Cloud redeploys automatically):
+
+```bash
+forecaster data update && forecaster data context
+forecaster train && forecaster backtest       # e.g. weekly; or skip to keep current models
+forecaster snapshot                           # rewrites deploy/snapshot/
+git add deploy/snapshot && git commit -m "Refresh snapshot" && git push
+```
+
 ## Database schema
 
 | Table | Purpose | Key |

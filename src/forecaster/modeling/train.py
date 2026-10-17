@@ -15,7 +15,14 @@ from forecaster.features.pipeline import load_inputs
 from forecaster.logging_setup import get_logger
 from forecaster.modeling.metrics import compare_to_baseline, evaluate
 from forecaster.modeling.predict import save_predictions
-from forecaster.modeling.registry import activate, make_model, new_version, record_run, save_artifact
+from forecaster.modeling.registry import (
+    activate,
+    make_model,
+    new_version,
+    record_run,
+    relative_artifact_path,
+    save_artifact,
+)
 from forecaster.modeling.walkforward import run_walk_forward, walk_forward_splits
 from forecaster.timeutil import utcnow
 
@@ -96,7 +103,7 @@ def train_symbol(session: Session, s: Settings, symbol: str, horizon: int, model
                          feature_set_version=FEATURE_SET_VERSION,
                          train_start=ds["as_of_time"].min().to_pydatetime(),
                          train_end=ds["as_of_time"].max().to_pydatetime(),
-                         metrics=m, artifact_path=str(path))
+                         metrics=m, artifact_path=relative_artifact_path(path, s.model_dir))
         save_predictions(session, run.id, sym.id, horizon, oofs[name], "oos")
         activate(session, run)
         session.commit()

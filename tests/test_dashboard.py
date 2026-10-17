@@ -26,7 +26,10 @@ def _seed(session: Session, s: Settings) -> None:
         upsert_klines(session, sym.id, "1d", synthetic_klines(T0, 800, seed=30 + i).reset_index(), "api")
     session.commit()
     train_symbol(session, s, "SOLUSDT", 7, ["momentum"], now=T0 + timedelta(days=801))
-    backtest_model(session, s, "SOLUSDT", 7, "momentum")
+    # Two backtests at the same horizon: the app must render several equity charts (regression:
+    # identical charts once raised StreamlitDuplicateElementId).
+    for model in ("climatology", "momentum"):
+        backtest_model(session, s, "SOLUSDT", 7, model)
 
 
 @pytest.fixture
@@ -65,7 +68,7 @@ def test_forecasts_models_oos_and_backtests(seeded) -> None:
     assert cov.between(0, 1).all()
 
     bts = dd.backtests(session, "SOLUSDT")
-    assert len(bts) == 1 and {"strategy", "benchmark"} <= set(bts[0]["curve"].columns)
+    assert len(bts) == 2 and {"strategy", "benchmark"} <= set(bts[0]["curve"].columns)
     assert isinstance(bts[0]["curve"].index, pd.DatetimeIndex) and bts[0]["verdict"]
 
 

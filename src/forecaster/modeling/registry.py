@@ -55,8 +55,22 @@ def save_artifact(model, model_dir: Path, symbol: str, horizon: int, version: st
     return d / "model.joblib"
 
 
-def load_artifact(path: str | Path):
-    return joblib.load(path)
+def relative_artifact_path(path: Path, model_dir: Path) -> str:
+    """Stored form of an artifact path: relative to MODEL_DIR, POSIX separators, so the database
+    stays valid when the model directory moves (another machine, a deployed snapshot)."""
+    try:
+        return Path(path).resolve().relative_to(Path(model_dir).resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def resolve_artifact_path(stored: str, model_dir: Path) -> Path:
+    p = Path(stored)
+    return p if p.is_absolute() else Path(model_dir) / p
+
+
+def load_artifact(path: str | Path, model_dir: Path | None = None):
+    return joblib.load(resolve_artifact_path(str(path), model_dir) if model_dir is not None else path)
 
 
 def record_run(session: Session, *, model, symbol_id: int, horizon: int, version: str,

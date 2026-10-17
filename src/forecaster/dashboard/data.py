@@ -34,12 +34,13 @@ def candles_with_indicators(session: Session, symbol: str, days: int = 365) -> p
     return out.iloc[-days:]
 
 
-def current_forecasts(session: Session, s: Settings, symbol: str, model: str) -> tuple[list[dict], str | None]:
+def current_forecasts(session: Session, s: Settings, symbol: str, model: str,
+                      store: bool = True) -> tuple[list[dict], str | None]:
     """Forecasts for every configured horizon, or ([], reason) if none can be produced."""
     out = []
     for h in s.forecast_horizons:
         try:
-            out.append(forecast(session, s, symbol, h, model, store=True))
+            out.append(forecast(session, s, symbol, h, model, store=store))
         except NoActiveModel as exc:
             return [], str(exc)
     return out, None

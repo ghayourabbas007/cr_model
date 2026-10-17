@@ -1,0 +1,18 @@
+# Streamlit Community Cloud dependencies for the static snapshot dashboard (deploy/streamlit_app.py).
+# Deliberately slim: no torch (the LSTM is not served in the cloud), no FastAPI, no Alembic.
+# Pinned to the versions the test suite passed with.
+pandas==3.0.6
+numpy==2.5.4
+scipy==1.18.1
+pydantic==2.14.1
+pydantic-settings==2.16.0
+python-dotenv==1.2.4
+SQLAlchemy==2.1.5
+scikit-learn==1.9.1
+lightgbm==4.7.0
+# CPU-only build: same `xgboost` module (artifacts load unchanged) without the ~200 MB CUDA/NCCL deps.
+xgboost-cpu==3.4.1
+joblib==1.6.0
+requests==2.34.2
+streamlit==1.66.0
+plotly==7.1.0

@@ -1,0 +1,12 @@
+{
+  "symbol": "SOLUSDT",
+  "horizon": 14,
+  "model": "momentum",
+  "version": "20261017T112816Z",
+  "feature_set_version": "v1",
+  "features": [
+    "ret_14"
+  ],
+  "trained_at": "2026-10-17 11:28:16.102181",
+  "rows": 2244
+}

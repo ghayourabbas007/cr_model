@@ -5,6 +5,8 @@ Reads the database directly; read-only apart from storing the live forecasts it 
 
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import streamlit as st
 
@@ -16,6 +18,8 @@ from forecaster.db.session import get_sessionmaker
 
 st.set_page_config(page_title="Crypto Forecaster", page_icon="📈", layout="wide")
 s = get_settings()
+# Static cloud deployment over a committed snapshot (deploy/streamlit_app.py): never write to it.
+SNAPSHOT = bool(os.environ.get("FORECASTER_SNAPSHOT"))
 
 
 @st.cache_resource
@@ -36,7 +40,7 @@ def load_candles(symbol: str, days: int) -> pd.DataFrame:
 @st.cache_data(ttl=300, show_spinner="Computing forecast…")
 def load_forecasts(symbol: str, model: str):
     with _session() as session:
-        return dd.current_forecasts(session, s, symbol, model)
+        return dd.current_forecasts(session, s, symbol, model, store=not SNAPSHOT)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -109,6 +113,10 @@ except Exception as exc:  # database not configured / reachable
 if candles.empty:
     st.info(f"No candles stored for {symbol}. Run `forecaster data backfill`.")
     st.stop()
+if SNAPSHOT:
+    last_close = candles.index.max() + pd.Timedelta(days=1)
+    st.info(f"Static snapshot: market data and models as of **{last_close:%Y-%m-%d %H:%M} UTC**. "
+            "It is refreshed manually, so forecasts are not live.", icon="🗂️")
 
 tab_fc, tab_mkt, tab_perf, tab_bt = st.tabs(["Forecast", "Market", "Model performance", "Backtest"])
 
@@ -119,7 +127,8 @@ with tab_fc:
         st.info(f"No forecast available: {reason}")
     else:
         if any(f["stale"] for f in forecasts):
-            st.warning("Market data is more than 2 days old; run `forecaster data update`.", icon="⏱️")
+            hint = "the owner refreshes this snapshot periodically" if SNAPSHOT else "run `forecaster data update`"
+            st.warning(f"Market data is more than 2 days old; {hint}.", icon="⏱️")
         cols = st.columns(len(forecasts))
         for col, f in zip(cols, forecasts, strict=True):
             with col:
@@ -133,16 +142,16 @@ with tab_fc:
                     unsafe_allow_html=True)
         closes = candles["close"].copy()
         closes.index = closes.index + pd.Timedelta(days=1)  # plot at close time, like the forecast
-        st.plotly_chart(charts.forecast_fan(closes, forecasts, dark), use_container_width=True)
+        st.plotly_chart(charts.forecast_fan(closes, forecasts, dark), width="stretch")
         with st.expander("Forecast data table"):
-            st.dataframe(pd.DataFrame(forecasts).drop(columns=["disclaimer"]), use_container_width=True)
+            st.dataframe(pd.DataFrame(forecasts).drop(columns=["disclaimer"]), width="stretch")
         st.caption("A probability near 50% means the model has no meaningful directional view.")
 
 # --- market -----------------------------------------------------------------------------------
 with tab_mkt:
-    st.plotly_chart(charts.candlestick(candles, symbol, dark), use_container_width=True)
+    st.plotly_chart(charts.candlestick(candles, symbol, dark), width="stretch")
     with st.expander("Candle data table"):
-        st.dataframe(candles.iloc[::-1], use_container_width=True)
+        st.dataframe(candles.iloc[::-1], width="stretch")
 
 # --- model performance ------------------------------------------------------------------------
 with tab_perf:
@@ -156,7 +165,7 @@ with tab_perf:
         st.dataframe(table.drop(columns=["run_id"]).style.format(
             {"accuracy": "{:.3f}", "roc_auc": "{:.3f}", "brier": "{:.4f}", "brier_skill": "{:+.3f}",
              "mae_q50": "{:.4f}", "coverage_80": "{:.0%}", "always_up_acc": "{:.3f}"}, na_rep="n/a"),
-            use_container_width=True, hide_index=True)
+            width="stretch", hide_index=True)
         sel = table[(table["model"] == model) & (table["horizon"] == horizon)]
         if not sel.empty:
             v = sel.iloc[0]["verdict"]
@@ -169,11 +178,11 @@ with tab_perf:
             rel = dd.reliability(oos)
             cov = dd.rolling_coverage(oos)
             c1, c2 = st.columns(2)
-            c1.plotly_chart(charts.reliability_chart(rel, dark), use_container_width=True)
-            c2.plotly_chart(charts.coverage_chart(cov.dropna(), dark), use_container_width=True)
+            c1.plotly_chart(charts.reliability_chart(rel, dark), width="stretch")
+            c2.plotly_chart(charts.coverage_chart(cov.dropna(), dark), width="stretch")
             with st.expander("Calibration and coverage data tables"):
-                st.dataframe(rel, use_container_width=True, hide_index=True)
-                st.dataframe(oos.iloc[::-1], use_container_width=True)
+                st.dataframe(rel, width="stretch", hide_index=True)
+                st.dataframe(oos.iloc[::-1], width="stretch")
 
 # --- backtest ---------------------------------------------------------------------------------
 with tab_bt:
@@ -196,9 +205,10 @@ with tab_bt:
         st.caption(f"{b['period_start']:%Y-%m-%d} → {b['period_end']:%Y-%m-%d} · costs {b['fee_bps']:g} bps fee + "
                    f"{b['slippage_bps']:g} bps slippage per side · bootstrap p = {num(b['p_value'])}")
         if not b["curve"].empty:
-            st.plotly_chart(charts.equity_chart(b["curve"], "Equity vs buy & hold", dark), use_container_width=True)
+            st.plotly_chart(charts.equity_chart(b["curve"], f"{b['strategy']}: equity vs buy & hold", dark),
+                            width="stretch", key=f"equity-{b['strategy']}-{b['horizon']}")
             with st.expander("Equity curve data table"):
-                st.dataframe(b["curve"].iloc[::-1], use_container_width=True)
+                st.dataframe(b["curve"].iloc[::-1], width="stretch")
 
 st.divider()
 st.caption(f"{DISCLAIMER} Past performance, including backtests, does not predict future results.")

@@ -63,7 +63,7 @@ def forecast(session: Session, s: Settings, symbol: str, horizon: int, model_nam
     if run is None:
         raise NoActiveModel(f"No active {name} model for {symbol} h={horizon}; run `forecaster train`")
 
-    model = load_artifact(run.artifact_path)
+    model = load_artifact(run.artifact_path, s.model_dir)
     feats = build_features(load_inputs(session, s, symbol))
     avail = feats[(feats["as_of_time"] <= pd.Timestamp(now)) & feats["ref_close"].notna()]
     if avail.empty:

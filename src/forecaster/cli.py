@@ -309,6 +309,16 @@ def dashboard(port: int = typer.Option(8501, help="Streamlit port.")) -> None:
                                       "--server.port", str(port), "--server.address", "127.0.0.1"]))
 
 
+@app.command("snapshot")
+def snapshot(out: Path = typer.Option(PROJECT_ROOT / "deploy" / "snapshot", help="Output directory.")) -> None:
+    """Export a compact SQLite + model snapshot for the static cloud dashboard (deploy/)."""
+    from forecaster.snapshot import build_snapshot
+
+    s = get_settings()
+    counts = build_snapshot(s.sqlalchemy_url, s.model_dir, out)
+    typer.echo(f"Snapshot written to {out}: {counts}")
+
+
 def _print_reports(reports) -> None:
     for r in reports:
         typer.echo(f"{r.symbol:<10} {r.interval:<3} dump={r.rows_dump:<6} api={r.rows_api:<6} "
