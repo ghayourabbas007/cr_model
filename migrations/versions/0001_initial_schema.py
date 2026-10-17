@@ -74,7 +74,7 @@ def upgrade() -> None:
         sa.Column("interval", sa.String(4), nullable=False),
         sa.Column("as_of_time", sa.DateTime(), nullable=False),
         sa.Column("feature_set_version", sa.String(32), nullable=False),
-        sa.Column("values", sa.JSON(), nullable=False),
+        sa.Column("feature_values", sa.JSON(), nullable=False),
         _created_at(),
         sa.PrimaryKeyConstraint("id", name="pk_features"),
         sa.ForeignKeyConstraint(

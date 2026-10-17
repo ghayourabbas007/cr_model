@@ -126,7 +126,7 @@ class FeatureRow(TimestampMixin, Base):
     interval: Mapped[str] = mapped_column(String(4), nullable=False)
     as_of_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     feature_set_version: Mapped[str] = mapped_column(String(32), nullable=False)
-    values: Mapped[dict] = mapped_column(JSON, nullable=False)
+    feature_values: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
 class ModelRun(TimestampMixin, Base):

@@ -19,19 +19,21 @@ _KLINE_KEY = ["symbol_id", "interval", "open_time"]
 _KLINE_UPDATE = [c for c in COLUMNS if c != "open_time"] + ["source"]
 
 
-def _upsert(session: Session, table: Table, records: list[dict], key: list[str], update: list[str]) -> None:
+def upsert_rows(session: Session, table: Table, records: list[dict], key: list[str], update: list[str],
+            touch: str | None = "ingested_at") -> None:
+    touched = {touch: func.now()} if touch else {}
     dialect = session.get_bind().dialect.name
     for i in range(0, len(records), BATCH_SIZE):
         chunk = records[i : i + BATCH_SIZE]
         if dialect == "mysql":
             stmt = mysql_insert(table).values(chunk)
             stmt = stmt.on_duplicate_key_update(
-                {c: stmt.inserted[c] for c in update} | {"ingested_at": func.now()}
+                {c: stmt.inserted[c] for c in update} | touched
             )
         elif dialect == "sqlite":
             stmt = sqlite_insert(table).values(chunk)
             stmt = stmt.on_conflict_do_update(
-                index_elements=key, set_={c: stmt.excluded[c] for c in update} | {"ingested_at": func.now()}
+                index_elements=key, set_={c: stmt.excluded[c] for c in update} | touched
             )
         else:
             raise NotImplementedError(f"Upsert not implemented for dialect {dialect!r}")
@@ -56,7 +58,7 @@ def upsert_klines(session: Session, symbol_id: int, interval: str, df: pd.DataFr
     records = _records(df[COLUMNS])
     for rec in records:
         rec.update(symbol_id=symbol_id, interval=interval, source=source)
-    _upsert(session, Kline.__table__, records, _KLINE_KEY, _KLINE_UPDATE)
+    upsert_rows(session, Kline.__table__, records, _KLINE_KEY, _KLINE_UPDATE)
     return len(records)
 
 
@@ -65,7 +67,7 @@ def upsert_context(
 ) -> int:
     records = [{"symbol_id": symbol_id, "metric": metric, "ts": ts, "value": float(v)} for ts, v in points]
     if records:
-        _upsert(session, MarketContext.__table__, records, ["symbol_id", "metric", "ts"], ["value"])
+        upsert_rows(session, MarketContext.__table__, records, ["symbol_id", "metric", "ts"], ["value"])
     return len(records)
 
 

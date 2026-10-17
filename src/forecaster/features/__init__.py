@@ -1,1 +1,1 @@
-"""Implemented in a later phase."""
+"""Feature engineering. See build.py for the timing / leakage conventions."""

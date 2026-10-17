@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     update_cron_hours: str = "0,4,8,12,16,20"
     update_cron_minute: int = 5
 
+    # Market-wide factors joined into every target's features (the target itself is skipped).
+    cross_asset_symbols: CsvStr = Field(default_factory=lambda: ["BTCUSDT", "ETHUSDT"])
+    include_funding_features: bool = True
+    # Off by default: Binance serves only ~30 days of open-interest history.
+    include_oi_features: bool = False
+
     forecast_horizons: CsvInt = Field(default_factory=lambda: [7, 14])
     model_dir: Path = Path("artifacts/models")
 
@@ -55,7 +61,7 @@ class Settings(BaseSettings):
     binance_api_key: SecretStr | None = None
     binance_api_secret: SecretStr | None = None
 
-    @field_validator("symbols", "target_symbols", "intervals", mode="before")
+    @field_validator("symbols", "target_symbols", "cross_asset_symbols", "intervals", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> object:
         if isinstance(v, str):
@@ -69,7 +75,7 @@ class Settings(BaseSettings):
             return [int(s) for s in v.split(",") if s.strip()]
         return v
 
-    @field_validator("symbols", "target_symbols")
+    @field_validator("symbols", "target_symbols", "cross_asset_symbols")
     @classmethod
     def _upper(cls, v: list[str]) -> list[str]:
         return [s.upper() for s in v]
@@ -101,8 +107,8 @@ class Settings(BaseSettings):
 
     @property
     def all_symbols(self) -> list[str]:
-        """Configured symbols plus any target symbol not already listed, order preserved."""
-        return list(dict.fromkeys([*self.symbols, *self.target_symbols]))
+        """Configured, target and cross-asset symbols, de-duplicated, order preserved."""
+        return list(dict.fromkeys([*self.symbols, *self.target_symbols, *self.cross_asset_symbols]))
 
 
 @lru_cache

@@ -22,6 +22,8 @@ db_app = typer.Typer(help="Database management.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
 data_app = typer.Typer(help="Market-data ingestion (public endpoints only).", no_args_is_help=True)
 app.add_typer(data_app, name="data")
+features_app = typer.Typer(help="Feature engineering and leakage checks.", no_args_is_help=True)
+app.add_typer(features_app, name="features")
 
 log = get_logger("forecaster.cli")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -122,6 +124,36 @@ def data_schedule(run_now: bool = typer.Option(True, help="Run one update immedi
     from forecaster.data.scheduler import run_scheduler
 
     run_scheduler(get_settings(), run_now)
+
+
+@features_app.command("build")
+def features_build(
+    symbol: list[str] = typer.Option(None, "--symbol", "-s", help="Repeatable. Default: TARGET_SYMBOLS."),
+) -> None:
+    """Build daily features from stored klines and save them to the features table."""
+    from forecaster.features.pipeline import run_build_features
+
+    syms = [x.upper() for x in symbol] if symbol else None
+    for name, n in run_build_features(get_settings(), syms).items():
+        typer.echo(f"{name}: {n} feature rows stored")
+
+
+@features_app.command("check-leakage")
+def features_check_leakage(
+    symbol: str = typer.Option("SOLUSDT", "--symbol", "-s"),
+    cutoffs: int = typer.Option(5, help="Number of truncation points to test."),
+) -> None:
+    """Rebuild features from data truncated at several cutoffs; fail if any value changes."""
+    from forecaster.features.build import LeakageError
+    from forecaster.features.pipeline import run_leakage_check
+
+    try:
+        tested = run_leakage_check(get_settings(), symbol.upper(), cutoffs)
+    except LeakageError as exc:
+        typer.secho(f"LEAKAGE DETECTED: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    typer.secho(f"OK: no look-ahead at {len(tested)} cutoffs "
+                f"({tested[0]:%Y-%m-%d} .. {tested[-1]:%Y-%m-%d %H:%M})", fg=typer.colors.GREEN)
 
 
 def _print_reports(reports) -> None:

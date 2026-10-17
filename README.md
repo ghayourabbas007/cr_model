@@ -13,7 +13,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 |------:|-------|-------|
 | 1 | Scaffold, config, logging, MySQL schema, Alembic | done |
 | 2 | Data pipeline (backfill, incremental updater, upserts, funding/OI) | done |
-| 3 | Feature engineering + leakage checks | not started |
+| 3 | Feature engineering + leakage checks | done |
 | 4 | Modeling (baselines, LightGBM/XGBoost, LSTM, walk-forward) | not started |
 | 5 | Backtesting | not started |
 | 6 | FastAPI | not started |
@@ -32,7 +32,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 │   ├── cli.py                # `forecaster` command
 │   ├── db/                   # SQLAlchemy models, session, repository helpers
 │   ├── data/                 # Binance REST client, dumps, backfill, updater, scheduler
-│   ├── features/             # phase 3
+│   ├── features/             # indicators, feature/target builder, leakage guard, storage
 │   ├── modeling/             # phase 4
 │   ├── backtest/             # phase 5
 │   ├── api/                  # phase 6
@@ -79,6 +79,43 @@ forecaster data schedule                      # long-running updater (cron, UTC)
   or cron.
 
 
+## Features (phase 3)
+
+```bash
+forecaster features build                     # build + store features for TARGET_SYMBOLS
+forecaster features check-leakage -s SOLUSDT  # truncation test on real stored data
+```
+
+Feature set `v1` (daily, one row per candle):
+
+| Group | Features |
+|-------|----------|
+| Returns | log returns over 1, 3, 7, 14, 30, 60 days |
+| Volatility | rolling std of daily returns (7/14/30), ATR(14)/close, daily range, 7-day realized vol from 4h candles |
+| Trend | close vs SMA 7/20/50/200 and EMA 12/26, MACD line/signal/histogram (scaled by price) |
+| Oscillators | RSI(14), Bollinger %B and bandwidth (20, 2σ) |
+| Volume | volume and trade count vs 20-day average, 5/20 volume trend, taker-buy ratio |
+| Drawdown | distance below the 30- and 90-day high |
+| Cross-asset | BTC and ETH returns (1/7/30), 30-day correlation and beta with the target, relative 7-day strength |
+| Futures context | latest funding rate and 7-day mean funding; 7-day open-interest change (off by default) |
+
+Targets (separate frame, never mixed into features): `fwd_logret_{7,14}` = log(close(t+h) / close(t)),
+`fwd_up_{7,14}`, and `target_end_time_{h}`, the moment the target becomes known.
+
+**Leakage controls**
+
+- Each row carries `as_of_time` = close of its last candle. Every joined input (other symbols, 4h
+  candles, funding, open interest) is aligned with a backward as-of join on its *publish* time.
+  Open interest is treated as known only after its daily bucket ends.
+- Only causal operations: trailing rolling windows and EWMs, no centred windows, no full-sample
+  scaling. Any normalisation for models is fitted inside each walk-forward training fold (phase 4).
+- Missing candles stay missing: the calendar is reindexed and those rows are blanked, never
+  interpolated.
+- `check_no_lookahead` rebuilds all features from inputs truncated at several cutoffs (including
+  mid-candle) and requires every already-knowable value to be identical to the full-history build.
+  Tests prove the check catches planted leaks (next-day price, centred window, full-sample mean).
+- `make_dataset` keeps only rows whose target is realized by `now`.
+
 ## Database schema
 
 | Table | Purpose | Key |
@@ -118,4 +155,8 @@ the migration and the ORM models have identical columns.
   from their own klines.
 - Funding/OI come from USD-M perpetuals; spot symbols without a perpetual are skipped.
 - Dump timestamps switched from milliseconds to microseconds in 2025; both are handled.
+- EWM-based indicators (EMA, RSI, ATR, MACD) carry their state across a missing candle; only the
+  missing row itself is blanked. Rolling-window features are NaN for any window touching a gap.
+- Long-window features (SMA 200) need 200 days of history, so the first ~200 rows per symbol are
+  incomplete. Tree models tolerate NaN; the LSTM will need complete rows.
 

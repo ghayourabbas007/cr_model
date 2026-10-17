@@ -6,6 +6,7 @@ import io
 import zipfile
 from datetime import datetime, timedelta
 
+import numpy as np
 import pandas as pd
 
 from forecaster.data.klines import parse_klines
@@ -98,6 +99,26 @@ class FakeSession:
         if isinstance(item, Exception):
             raise item
         return item
+
+
+def synthetic_klines(start: datetime, n: int, interval: str = "1d", seed: int = 0,
+                     price: float = 100.0, vol: float = 0.03) -> pd.DataFrame:
+    """Geometric random-walk klines indexed by open_time, in the shape load_klines returns."""
+    rng = np.random.default_rng(seed)
+    delta = pd.Timedelta(interval_delta(interval))
+    idx = pd.date_range(start, periods=n, freq=delta, name="open_time")
+    close = price * np.exp(np.cumsum(rng.normal(0, vol, n)))
+    open_ = np.r_[price, close[:-1]]
+    high = np.maximum(open_, close) * (1 + rng.uniform(0, vol, n))
+    low = np.minimum(open_, close) * (1 - rng.uniform(0, vol, n))
+    volume = rng.uniform(1_000, 5_000, n)
+    taker = volume * rng.uniform(0.3, 0.7, n)
+    return pd.DataFrame({
+        "close_time": idx + delta - pd.Timedelta(milliseconds=1),
+        "open": open_, "high": high, "low": low, "close": close, "volume": volume,
+        "quote_volume": volume * close, "trades": rng.integers(100, 1_000, n),
+        "taker_buy_base_volume": taker, "taker_buy_quote_volume": taker * close,
+    }, index=idx)
 
 
 def _ms_to_dt(ms: int) -> datetime:
