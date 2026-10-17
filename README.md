@@ -79,6 +79,36 @@ forecaster dashboard    # UI   -> http://127.0.0.1:8501
 Keep it current with `forecaster data schedule` (or schedule `forecaster data update` and
 `forecaster data context`), and retrain periodically, e.g. weekly, with `forecaster train`.
 
+## Results on real data (SOLUSDT, run 2026-10-17)
+
+Real Binance data from 2020-08 (2,258 daily rows, 0 gaps). The walk-forward out-of-sample period
+runs from about 2021-09 to 2026-10. The leakage check passed at 9 cutoffs. Timings on a laptop
+CPU: backfill 6 min, `train` 7.4 min (all 5 models × 2 horizons), backtest + predict 20 s.
+
+| Horizon | Model | AUC | Brier skill vs climatology | 80% coverage | Backtest Sharpe (B&H) | Bootstrap p |
+|---|---|---|---|---|---|---|
+| 7d | climatology | 0.465 | baseline | 0.91 | 0.25 (0.68) | 0.83 |
+| 7d | lgbm | 0.545 | -0.037 | 0.69 | 0.79 (0.68) | 0.39 |
+| 7d | xgb | 0.549 | -0.031 | 0.77 | 0.83 (0.68) | 0.36 |
+| 7d | lstm | 0.485 | -0.019 | 0.84 | 0.64 (0.68) | 0.56 |
+| 14d | lgbm | 0.544 | -0.071 | 0.62 | 0.93 (0.69) | 0.30 |
+| 14d | xgb | 0.547 | -0.057 | 0.74 | 0.97 (0.69) | 0.28 |
+| 14d | lstm | 0.515 | -0.018 | 0.87 | 1.35 (0.69) | 0.09 |
+
+**What this says:**
+
+- **No model beats the baseline on probability quality.** Every Brier skill score is negative: the
+  probabilities are worse than simply using the historical up-rate. The tree models rank a little
+  better than chance (AUC about 0.545) but are over-confident. The verdict is "mixed" at best.
+- **The tree models' 80% ranges are too narrow** (62–77% coverage), while climatology's are too wide
+  (90%). Treat the price range as rougher than its label says.
+- **Backtests look better than they are.** Several strategies beat buy-and-hold on Sharpe, mainly by
+  being out of the market for most of the 2022 crash (buy-and-hold drawdown -96%). None is
+  statistically significant (all p > 0.05). Five models × 2 horizons is also a multiple-comparison
+  setting, which makes one lucky result likely.
+- Bottom line: this is a sound, leakage-checked research framework, **not** a demonstrated
+  trading edge.
+
 ## Data pipeline (phase 2)
 
 ```bash
