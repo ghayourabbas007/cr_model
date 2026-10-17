@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forecaster"
+version = "0.1.0"
+description = "Read-only, probabilistic crypto price forecasting for Binance spot markets."
+requires-python = ">=3.11"
+
+[project.scripts]
+forecaster = "forecaster.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
