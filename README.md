@@ -7,6 +7,8 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 > financial advice. This system is **read-only**: it uses public Binance market-data endpoints
 > only and never places orders.
 
+**Live demo (static snapshot):** https://ghcrymodel.streamlit.app/
+
 ## Status
 
 | Phase | Scope | State |
@@ -282,6 +284,8 @@ The cloud copy of the dashboard is **a static snapshot**. Streamlit Cloud cannot
 and Binance blocks US cloud regions, so the app cannot run the pipeline itself. It reads
 `deploy/snapshot/` (about 20 MB: SQLite plus the active model files), and a banner on the page shows
 the snapshot date.
+
+Deployed at **https://ghcrymodel.streamlit.app/**.
 
 **Deploy (one time):**
 
