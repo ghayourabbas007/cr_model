@@ -25,12 +25,15 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.mysql import DATETIME as MYSQL_DATETIME
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from forecaster.db.base import Base
 
 # BIGINT autoincrement on MySQL, INTEGER on SQLite (which only autoincrements INTEGER PKs).
 BigId = BigInteger().with_variant(Integer(), "sqlite")
+# Millisecond precision on MySQL; plain DATETIME would round 23:59:59.999 up to the next day.
+DateTimeMs = DateTime().with_variant(MYSQL_DATETIME(fsp=3), "mysql")
 Price = Numeric(28, 12, asdecimal=False)
 Qty = Numeric(38, 12, asdecimal=False)
 
@@ -67,7 +70,7 @@ class Kline(Base):
     symbol_id: Mapped[int] = mapped_column(ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False)
     interval: Mapped[str] = mapped_column(String(4), nullable=False)
     open_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    close_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    close_time: Mapped[datetime] = mapped_column(DateTimeMs, nullable=False)
     open: Mapped[float] = mapped_column(Price, nullable=False)
     high: Mapped[float] = mapped_column(Price, nullable=False)
     low: Mapped[float] = mapped_column(Price, nullable=False)
@@ -84,6 +87,23 @@ class Kline(Base):
     )
 
     symbol_ref: Mapped[Symbol] = relationship(back_populates="klines")
+
+
+class MarketContext(Base):
+    """Extra per-symbol time series from futures markets (funding rate, open interest).
+
+    `ts` is the time the value was published by Binance, so it is knowable at `ts`.
+    """
+
+    __tablename__ = "market_context"
+    __table_args__ = (UniqueConstraint("symbol_id", "metric", "ts", name="uq_market_context_key"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    symbol_id: Mapped[int] = mapped_column(ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False)
+    metric: Mapped[str] = mapped_column(String(32), nullable=False)
+    ts: Mapped[datetime] = mapped_column(DateTimeMs, nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
 
 class FeatureRow(TimestampMixin, Base):

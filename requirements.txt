@@ -12,11 +12,11 @@ alembic>=1.13
 PyMySQL>=1.1
 cryptography>=42  # required by PyMySQL for MySQL 8 caching_sha2_password auth
 
-# Data access (public market data only, no keys needed)
-python-binance>=1.0.19
+# Data access (public market data only, no keys needed).
+# A thin requests-based client is used instead of python-binance/ccxt for explicit control
+# over rate-limit headers, retries and testability.
 requests>=2.32
-tenacity>=8.3
-APScheduler>=3.10
+APScheduler>=3.10,<4
 
 # Modeling
 scikit-learn>=1.5

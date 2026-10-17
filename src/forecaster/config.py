@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     binance_base_url: str = "https://api.binance.com"
     binance_futures_base_url: str = "https://fapi.binance.com"
     binance_data_dump_url: str = "https://data.binance.vision"
+    # Pause when the reported 1-minute request weight reaches this (Binance spot limit is 6000).
+    binance_weight_soft_limit: int = 3000
+    include_market_context: bool = True
+    # Incremental updater schedule (UTC cron fields).
+    update_cron_hours: str = "0,4,8,12,16,20"
+    update_cron_minute: int = 5
 
     forecast_horizons: CsvInt = Field(default_factory=lambda: [7, 14])
     model_dir: Path = Path("artifacts/models")

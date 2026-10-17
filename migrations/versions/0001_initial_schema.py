@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import mysql
 from alembic import op
 
 revision: str = "0001"
@@ -17,6 +18,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 BigId = sa.BigInteger().with_variant(sa.Integer(), "sqlite")
+DateTimeMs = sa.DateTime().with_variant(mysql.DATETIME(fsp=3), "mysql")
 Price = sa.Numeric(28, 12, asdecimal=False)
 Qty = sa.Numeric(38, 12, asdecimal=False)
 
@@ -45,7 +47,7 @@ def upgrade() -> None:
         sa.Column("symbol_id", sa.Integer(), nullable=False),
         sa.Column("interval", sa.String(4), nullable=False),
         sa.Column("open_time", sa.DateTime(), nullable=False),
-        sa.Column("close_time", sa.DateTime(), nullable=False),
+        sa.Column("close_time", DateTimeMs, nullable=False),
         sa.Column("open", Price, nullable=False),
         sa.Column("high", Price, nullable=False),
         sa.Column("low", Price, nullable=False),
