@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     forecast_horizons: CsvInt = Field(default_factory=lambda: [7, 14])
     model_dir: Path = Path("artifacts/models")
 
+    # --- modeling ---
+    train_models: CsvStr = Field(default_factory=lambda: ["climatology", "momentum", "lgbm", "xgb", "lstm"])
+    serving_model: str = "lgbm"
+    wf_min_train_days: int = 365
+    wf_test_days: int = 90
+    wf_max_train_days: int | None = None  # None = expanding window; set for a rolling window
+    lstm_seq_len: int = 30
+    lstm_epochs: int = 60
+    random_seed: int = 42
+
     fee_bps: float = 10.0
     slippage_bps: float = 5.0
 
@@ -61,7 +71,7 @@ class Settings(BaseSettings):
     binance_api_key: SecretStr | None = None
     binance_api_secret: SecretStr | None = None
 
-    @field_validator("symbols", "target_symbols", "cross_asset_symbols", "intervals", mode="before")
+    @field_validator("symbols", "target_symbols", "cross_asset_symbols", "intervals", "train_models", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> object:
         if isinstance(v, str):

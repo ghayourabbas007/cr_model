@@ -159,11 +159,17 @@ class ModelRun(TimestampMixin, Base):
 
 
 class Prediction(TimestampMixin, Base):
-    """A forecast emitted at `as_of_time` for `horizon_days` ahead. All values are estimates."""
+    """A forecast emitted at `as_of_time` for `horizon_days` ahead. All values are estimates.
+
+    kind = "live": produced by `forecaster predict` in real time.
+    kind = "oos":  walk-forward out-of-sample prediction (model trained only on earlier data);
+                   used for backtests and calibration charts.
+    return_q* and realized_return are h-day forward *log* returns; price_q* = ref * exp(q).
+    """
 
     __tablename__ = "predictions"
     __table_args__ = (
-        UniqueConstraint("model_run_id", "as_of_time", "horizon_days", name="uq_predictions_key"),
+        UniqueConstraint("model_run_id", "as_of_time", "horizon_days", "kind", name="uq_predictions_run_time_kind"),
         Index("ix_predictions_symbol_time", "symbol_id", "as_of_time"),
     )
 
@@ -171,6 +177,7 @@ class Prediction(TimestampMixin, Base):
     model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id", ondelete="CASCADE"), nullable=False)
     symbol_id: Mapped[int] = mapped_column(ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False)
     as_of_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    kind: Mapped[str] = mapped_column(String(8), default="live", server_default="live", nullable=False)
     horizon_days: Mapped[int] = mapped_column(Integer, nullable=False)
     reference_price: Mapped[float] = mapped_column(Price, nullable=False)
     prob_up: Mapped[float | None] = mapped_column(Float)

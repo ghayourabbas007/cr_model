@@ -24,6 +24,8 @@ data_app = typer.Typer(help="Market-data ingestion (public endpoints only).", no
 app.add_typer(data_app, name="data")
 features_app = typer.Typer(help="Feature engineering and leakage checks.", no_args_is_help=True)
 app.add_typer(features_app, name="features")
+models_app = typer.Typer(help="Model versions.", no_args_is_help=True)
+app.add_typer(models_app, name="models")
 
 log = get_logger("forecaster.cli")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -154,6 +156,93 @@ def features_check_leakage(
         raise typer.Exit(1) from exc
     typer.secho(f"OK: no look-ahead at {len(tested)} cutoffs "
                 f"({tested[0]:%Y-%m-%d} .. {tested[-1]:%Y-%m-%d %H:%M})", fg=typer.colors.GREEN)
+
+
+@app.command("train")
+def train(
+    symbol: list[str] = typer.Option(None, "--symbol", "-s", help="Repeatable. Default: TARGET_SYMBOLS."),
+    horizon: list[int] = typer.Option(None, "--horizon", help="Repeatable. Default: FORECAST_HORIZONS."),
+    models: str = typer.Option(None, help="Comma-separated, e.g. lgbm,lstm. Default: TRAIN_MODELS."),
+) -> None:
+    """Retrain: walk-forward evaluation vs baseline, final fit, save new versions, activate."""
+    from forecaster.modeling.train import train_symbol
+
+    s = get_settings()
+    names = [m.strip() for m in models.split(",")] if models else s.train_models
+    for sym in [x.upper() for x in symbol] if symbol else s.target_symbols:
+        for h in horizon or s.forecast_horizons:
+            with session_scope() as session:
+                results = train_symbol(session, s, sym, h, names)
+            typer.echo(f"\n{sym}  horizon={h}d  (out-of-sample, walk-forward)")
+            typer.echo(f"  {'model':<12}{'acc':>7}{'auc':>7}{'brier':>8}{'BSS':>8}{'mae50':>8}"
+                       f"{'cov80':>7}  verdict")
+            for r in results:
+                m = r.metrics
+                cmp = m.get("vs_climatology") or {}
+                auc = f"{m['roc_auc']:.3f}" if m["roc_auc"] is not None else "  n/a"
+                bss = f"{cmp['brier_skill']:+.3f}" if cmp else "      -"
+                typer.echo(f"  {r.model_name:<12}{m['accuracy']:>7.3f}{auc:>7}{m['brier']:>8.4f}{bss:>8}"
+                           f"{m['mae_q50']:>8.4f}{m['coverage_80']:>7.2f}  {r.verdict}")
+            typer.echo(f"  always-up accuracy: {results[0].metrics['always_up_accuracy']:.3f}   "
+                       f"BSS = Brier skill vs climatology (>0 is better)   cov80 nominal = 0.80")
+
+
+@app.command("predict")
+def predict(
+    symbol: list[str] = typer.Option(None, "--symbol", "-s"),
+    model: str = typer.Option(None, help="Default: SERVING_MODEL."),
+    store: bool = typer.Option(True, help="Save to the predictions table."),
+) -> None:
+    """Forecast 7/14-day direction probability and price range from the latest closed candle."""
+    from forecaster import DISCLAIMER
+    from forecaster.modeling.predict import forecast, update_realized
+
+    s = get_settings()
+    for sym in [x.upper() for x in symbol] if symbol else s.target_symbols:
+        with session_scope() as session:
+            update_realized(session, sym)
+            for h in s.forecast_horizons:
+                f = forecast(session, s, sym, h, model, store=store)
+                stale = "  [STALE DATA]" if f["stale"] else ""
+                typer.echo(f"{sym} +{h}d from {f['as_of_time']:%Y-%m-%d} (price {f['reference_price']:.4f}) "
+                           f"[{f['model']} {f['model_version']}]{stale}\n"
+                           f"  P(up) = {f['prob_up']:.1%}\n"
+                           f"  80% range: {f['price_q10']:.4f} .. {f['price_q90']:.4f}  "
+                           f"(median {f['price_q50']:.4f})")
+    typer.secho(f"\n{DISCLAIMER}", fg=typer.colors.YELLOW)
+
+
+@models_app.command("list")
+def models_list(symbol: str = typer.Option(None, "--symbol", "-s")) -> None:
+    """Show model versions with their walk-forward metrics."""
+    from forecaster.db.repository import get_symbol
+    from forecaster.modeling.predict import list_runs
+
+    with session_scope() as session:
+        sym_id = None
+        if symbol:
+            sym = get_symbol(session, symbol)
+            sym_id = sym.id if sym else -1
+        for r in list_runs(session, sym_id):
+            m = r.metrics or {}
+            auc = m.get("roc_auc")
+            typer.echo(f"{r.id:>5} {'*' if r.is_active else ' '} {r.model_name:<12} h={r.horizon_days:<3}"
+                       f"{r.version}  brier={m.get('brier', float('nan')):.4f}  "
+                       f"auc={auc if auc is None else round(auc, 3)}  cov80={m.get('coverage_80', float('nan')):.2f}")
+
+
+@models_app.command("activate")
+def models_activate(run_id: int) -> None:
+    """Make a specific model version active (e.g. roll back)."""
+    from forecaster.db.models import ModelRun
+    from forecaster.modeling.registry import activate
+
+    with session_scope() as session:
+        run = session.get(ModelRun, run_id)
+        if run is None:
+            raise typer.BadParameter(f"No model run {run_id}")
+        activate(session, run)
+    typer.echo(f"Activated run {run_id}")
 
 
 def _print_reports(reports) -> None:

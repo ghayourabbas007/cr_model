@@ -14,7 +14,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 | 1 | Scaffold, config, logging, MySQL schema, Alembic | done |
 | 2 | Data pipeline (backfill, incremental updater, upserts, funding/OI) | done |
 | 3 | Feature engineering + leakage checks | done |
-| 4 | Modeling (baselines, LightGBM/XGBoost, LSTM, walk-forward) | not started |
+| 4 | Modeling (baselines, LightGBM/XGBoost, LSTM, walk-forward) | done |
 | 5 | Backtesting | not started |
 | 6 | FastAPI | not started |
 | 7 | Streamlit dashboard | not started |
@@ -33,7 +33,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 │   ├── db/                   # SQLAlchemy models, session, repository helpers
 │   ├── data/                 # Binance REST client, dumps, backfill, updater, scheduler
 │   ├── features/             # indicators, feature/target builder, leakage guard, storage
-│   ├── modeling/             # phase 4
+│   ├── modeling/             # baselines, GBM, LSTM, walk-forward, metrics, registry, train/predict
 │   ├── backtest/             # phase 5
 │   ├── api/                  # phase 6
 │   └── dashboard/            # phase 7
@@ -116,6 +116,44 @@ Targets (separate frame, never mixed into features): `fwd_logret_{7,14}` = log(c
   Tests prove the check catches planted leaks (next-day price, centred window, full-sample mean).
 - `make_dataset` keeps only rows whose target is realized by `now`.
 
+## Modeling (phase 4)
+
+```bash
+forecaster train                              # all TARGET_SYMBOLS x FORECAST_HORIZONS x TRAIN_MODELS
+forecaster train -s SOLUSDT --horizon 7 --models lgbm
+forecaster models list                        # versions, metrics, * = active
+forecaster models activate 42                 # roll back / switch version
+forecaster predict                            # live forecast from the active SERVING_MODEL
+```
+
+Every model outputs `prob_up` and the 10th/50th/90th percentiles of the h-day forward log
+return; the API converts them to a price range (`price = close × exp(q)`).
+
+| Model | Description |
+|-------|-------------|
+| `climatology` | Baseline: training-window up-rate and empirical return quantiles. Always trained. |
+| `momentum` | Baseline: the same statistics conditioned on the sign of the trailing 7/14-day return. |
+| `lgbm` / `xgb` | Gradient-boosted direction classifier (Platt-calibrated on the most recent, purged 20% of the training window) + one quantile regressor per quantile. Conservative, regularised defaults. |
+| `lstm` | PyTorch LSTM over the last 30 days of standardised features; direction head (BCE) + non-crossing quantile head (pinball loss), early stopping on a purged validation tail. |
+
+**Validation.** Walk-forward with an expanding (or rolling, `WF_MAX_TRAIN_DAYS`) window: test
+blocks of `WF_TEST_DAYS` after `WF_MIN_TRAIN_DAYS`. A training row is used only if its target was
+realized before the test block starts, which purges the h-1 rows whose targets overlap it. A
+fresh model is fitted per fold. No random splits anywhere.
+
+**Metrics** (out-of-sample, all folds pooled): accuracy, precision, recall, ROC-AUC, Brier score,
+log loss, a reliability table, MAE of the median, pinball loss per quantile, and 80% interval
+coverage (with below/above-band rates). Each model is compared with `climatology`: Brier skill
+score, pinball skill and accuracy delta. Each gets a verdict: *beats baseline*, *mixed* or
+*does NOT beat baseline*. The "always up" accuracy (= buy-and-hold view) is printed too.
+
+**Versioning.** `forecaster train` is the retrain command. Each run creates a new version
+(UTC timestamp) per model, saves `artifacts/models/{symbol}/{model}/h{h}/{version}/model.joblib` +
+`meta.json`, records a `model_runs` row with params and walk-forward metrics, stores the
+out-of-sample predictions (`predictions.kind = 'oos'`) for backtests and calibration charts, and
+activates the new version. `forecaster predict` stores `kind = 'live'` forecasts and later
+back-fills their `realized_return`.
+
 ## Database schema
 
 | Table | Purpose | Key |
@@ -125,7 +163,7 @@ Targets (separate frame, never mixed into features): `fwd_logret_{7,14}` = log(c
 | `market_context` | Funding rate, open interest per symbol (`ts` = publish time) | `(symbol_id, metric, ts)` |
 | `features` | Versioned feature vectors (JSON), stamped with `as_of_time` = when knowable | `(symbol_id, interval, as_of_time, feature_set_version)` |
 | `model_runs` | Model versions, params, walk-forward metrics, artifact path, active flag | `(model_name, symbol_id, horizon_days, version)` |
-| `predictions` | prob_up + q10/q50/q90 return & price per horizon; `realized_return` filled later | `(model_run_id, as_of_time, horizon_days)` |
+| `predictions` | prob_up + q10/q50/q90 log-return & price; `kind` = live | oos; `realized_return` filled later | `(model_run_id, as_of_time, horizon_days, kind)` |
 | `backtest_results` | Strategy vs. buy-and-hold metrics, explicit `beats_benchmark` flag, equity curve | — |
 
 All timestamps are naive UTC.
@@ -158,5 +196,12 @@ the migration and the ORM models have identical columns.
 - EWM-based indicators (EMA, RSI, ATR, MACD) carry their state across a missing candle; only the
   missing row itself is blanked. Rolling-window features are NaN for any window touching a gap.
 - Long-window features (SMA 200) need 200 days of history, so the first ~200 rows per symbol are
-  incomplete. Tree models tolerate NaN; the LSTM will need complete rows.
+  incomplete. Tree models handle NaN natively; the LSTM replaces NaN with the training mean (0 after
+  standardisation).
+- **Expect weak skill.** Liquid crypto prices are close to a random walk at 7–14 days. A small
+  positive Brier skill score is a good outcome; the system reports when a model does not beat
+  climatology instead of hiding it. Treat the 80% range as the more useful output.
+- Overlapping h-day targets make out-of-sample rows highly autocorrelated, so the effective sample
+  size is far smaller than the row count; metric differences of a few thousandths are noise.
+- Artifacts are pickles (joblib). Only load files this system wrote.
 
