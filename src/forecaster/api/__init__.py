@@ -1,1 +1,1 @@
-"""Implemented in a later phase."""
+"""Read-only FastAPI service. Use `create_app()`; `main.app` is the ASGI entry point."""

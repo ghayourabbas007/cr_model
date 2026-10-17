@@ -284,6 +284,20 @@ def backtest(
                             "for this horizon.", fg=typer.colors.YELLOW)
 
 
+@app.command("serve")
+def serve(
+    host: str = typer.Option(None, help="Default: API_HOST (127.0.0.1)."),
+    port: int = typer.Option(None, help="Default: API_PORT (8000)."),
+) -> None:
+    """Run the read-only REST API (docs at /docs)."""
+    import uvicorn
+
+    from forecaster.api.app import create_app
+
+    s = get_settings()
+    uvicorn.run(create_app(s), host=host or s.api_host, port=port or s.api_port, log_config=None)
+
+
 def _print_reports(reports) -> None:
     for r in reports:
         typer.echo(f"{r.symbol:<10} {r.interval:<3} dump={r.rows_dump:<6} api={r.rows_api:<6} "

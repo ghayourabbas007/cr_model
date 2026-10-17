@@ -16,7 +16,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 | 3 | Feature engineering + leakage checks | done |
 | 4 | Modeling (baselines, LightGBM/XGBoost, LSTM, walk-forward) | done |
 | 5 | Backtesting | done |
-| 6 | FastAPI | not started |
+| 6 | FastAPI | done |
 | 7 | Streamlit dashboard | not started |
 | 8 | Test hardening, docs | ongoing |
 
@@ -35,7 +35,7 @@ More symbols are added through configuration (`SYMBOLS`, `TARGET_SYMBOLS`).
 │   ├── features/             # indicators, feature/target builder, leakage guard, storage
 │   ├── modeling/             # baselines, GBM, LSTM, walk-forward, metrics, registry, train/predict
 │   ├── backtest/             # vectorised engine, performance stats, bootstrap, runner
-│   ├── api/                  # phase 6
+│   ├── api/                  # FastAPI app (read-only GET endpoints), response schemas
 │   └── dashboard/            # phase 7
 ├── artifacts/models/         # trained model files (git-ignored)
 └── tests/
@@ -179,6 +179,27 @@ forecaster backtest -s SOLUSDT --horizon 7 --models lgbm,momentum
 
 A custom engine (about 100 lines of pandas) is used instead of vectorbt or Backtrader. Every step
 is visible and covered by hand-computed tests, and vectorbt's numba dependency pins NumPy versions.
+
+## REST API (phase 6)
+
+```bash
+forecaster serve                              # http://127.0.0.1:8000, interactive docs at /docs
+# or: uvicorn forecaster.api.main:app
+```
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /forecast/{symbol}?model=&horizons=7,14` | Per horizon: `prob_up`, `prob_down`, `direction`, 10/50/90% log-return quantiles, the 80% `price_range` (low / median / high), the model version, its walk-forward verdict, backtest interval coverage, and a `stale` flag |
+| `GET /backtest/{symbol}?horizon=&include_curve=false` | Latest backtest per strategy: returns, Sharpe, drawdown, win rate, trades, the buy-and-hold figures, `beats_benchmark`, bootstrap p-value, verdict, and optionally the equity curve |
+| `GET /models?symbol=&all=false` | Active (or all) model versions with walk-forward metrics and verdict vs climatology |
+| `GET /health` | Database status, latest candle and staleness per target symbol, number of active models |
+
+Every forecast and backtest response includes `disclaimer`; forecasts also set `is_estimate: true`.
+Only `GET` exists (a test asserts this). The API binds to `127.0.0.1` and has no auth because it
+is read-only; put it behind a reverse proxy with auth before exposing it. Forecasts are computed
+on demand from the active model, stored as `kind = 'live'`, and cached until a new daily candle
+closes or a new model is activated. `404` = not a configured target, `503` = no data or no
+trained model yet.
 
 ## Database schema
 

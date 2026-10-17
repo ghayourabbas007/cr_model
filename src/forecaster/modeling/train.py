@@ -34,14 +34,19 @@ class TrainResult:
 
     @property
     def verdict(self) -> str:
-        if self.model_name == BASELINE:
-            return "baseline"
-        cmp = self.metrics.get("vs_climatology") or {}
-        if cmp.get("beats_baseline_brier") and cmp.get("beats_baseline_auc"):
-            return "beats baseline"
-        if cmp.get("beats_baseline_brier") or cmp.get("beats_baseline_auc"):
-            return "mixed"
-        return "does NOT beat baseline"
+        return model_verdict(self.model_name, self.metrics)
+
+
+def model_verdict(model_name: str, metrics: dict | None) -> str:
+    """Walk-forward verdict vs climatology: Brier skill and AUC must both improve."""
+    if model_name == BASELINE:
+        return "baseline"
+    cmp = (metrics or {}).get("vs_climatology") or {}
+    if cmp.get("beats_baseline_brier") and cmp.get("beats_baseline_auc"):
+        return "beats baseline"
+    if cmp.get("beats_baseline_brier") or cmp.get("beats_baseline_auc"):
+        return "mixed"
+    return "does NOT beat baseline"
 
 
 def train_symbol(session: Session, s: Settings, symbol: str, horizon: int, model_names: list[str],

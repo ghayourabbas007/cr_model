@@ -76,11 +76,17 @@ class Settings(BaseSettings):
     bt_bootstrap_samples: int = 2000
     bt_bootstrap_block: int = 20
 
+    # --- API ---
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+    api_cors_origins: CsvStr = Field(default_factory=list)
+
     # Never required. Only ever read from the environment; never logged.
     binance_api_key: SecretStr | None = None
     binance_api_secret: SecretStr | None = None
 
-    @field_validator("symbols", "target_symbols", "cross_asset_symbols", "intervals", "train_models", mode="before")
+    @field_validator("symbols", "target_symbols", "cross_asset_symbols", "intervals", "train_models",
+                     "api_cors_origins", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> object:
         if isinstance(v, str):
